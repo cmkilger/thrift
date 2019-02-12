@@ -60,6 +60,7 @@ public:
     namespaced_ = false;
     gen_cocoa_ = false;
     promise_kit_ = false;
+    juxta_promise_ = false;
     safe_enums_ = false;
 
     for( iter = parsed_options.begin(); iter != parsed_options.end(); ++iter) {
@@ -82,6 +83,11 @@ public:
           throw "PromiseKit only available with Swift 2.x, use `cocoa` option" + iter->first;
         }
         promise_kit_ = true;
+      } else if( iter->first.compare("juxta_promise") == 0) {
+        if (gen_cocoa_ != false) {
+          throw "JuxtaFoundation only available with the latest version of Swift, do not use `cocoa` option" + iter->first;
+        }
+        juxta_promise_ = true;
       } else {
         throw "unknown option swift:" + iter->first;
       }
@@ -186,6 +192,7 @@ public:
   string declare_property(t_field* tfield, bool is_private);
   string function_signature(t_function* tfunction);
   string async_function_signature(t_function* tfunction);
+  string juxta_promise_function_signature(t_function* tfunction);
 
 
   string argument_list(t_struct* tstruct, string protocol_name, bool is_internal);
@@ -287,6 +294,7 @@ private:
   /** Swift 2/Cocoa compatibility */
   bool gen_cocoa_;
   bool promise_kit_;
+  bool juxta_promise_;
 
 };
 
@@ -368,6 +376,10 @@ string t_swift_generator::swift_thrift_imports() {
 
   if (gen_cocoa_ && promise_kit_) {
     includes_list.emplace_back("PromiseKit");
+  }
+
+  if (juxta_promise_) {
+    includes_list.emplace_back("JuxtaFoundation");
   }
 
   ostringstream includes;
@@ -1660,6 +1672,9 @@ void t_swift_generator::generate_swift_service_protocol_async(ostream& out, t_se
     for (f_iter = functions.begin(); f_iter != functions.end(); ++f_iter) {
       async_function_docstring(out, *f_iter);
       indent(out) << async_function_signature(*f_iter) << endl << endl;
+      if (juxta_promise_) {
+        indent(out) << juxta_promise_function_signature(*f_iter) << endl;
+      } //
     }
   } else {
     for (f_iter = functions.begin(); f_iter != functions.end(); ++f_iter) {
@@ -2196,6 +2211,67 @@ void t_swift_generator::generate_swift_service_client_async_implementation(ostre
     }
     block_close(out);
     block_close(out);
+
+    // Juxta Promise function
+    if (juxta_promise_) {
+
+      indent(out) << "public " << juxta_promise_function_signature(*f_iter);
+      block_open(out);
+      out << endl;
+      out << indent() << "let promise = ResolvablePromise<" << type_name((*f_iter)->get_returntype()) << ">()" << endl
+          << indent() << "let transport = factory.newTransport()" << endl
+          << indent() << "let proto = Protocol(on: transport)" << endl
+          << endl;
+
+      out << indent() << "do";
+      block_open(out);
+
+      generate_swift_service_client_send_async_function_invocation(out, *f_iter);
+
+      indent_down();
+      out << indent() << "} catch let error {" << endl;
+      indent_up();
+      out << indent() << "promise.reject(error)" << endl;
+      block_close(out);
+
+      out << endl;
+
+      bool ret_is_void = (*f_iter)->get_returntype()->is_void();
+      bool is_oneway = (*f_iter)->is_oneway();
+
+      string error_completion_call = "promise.reject(error)";
+      indent(out) << "transport.flush";
+      block_open(out);
+      out << indent() << "(trans, error) in" << endl << endl;
+      out << indent() << "if let error = error";
+      block_open(out);
+      out << indent() << error_completion_call << endl;
+      block_close(out);
+
+      if (!is_oneway) {
+        out << indent() << "do";
+        block_open(out);
+        indent(out);
+        if (!ret_is_void) {
+          out << "let result = ";
+        }
+        out << "try self.recv_" << (*f_iter)->get_name() << "(on: proto)" << endl;
+
+        out << indent() << (ret_is_void ? "promise.resolve(Void())" : "promise.resolve(result)") << endl;
+        indent_down();
+        out << indent() << "} catch let error {" << endl;
+        indent_up();
+        out << indent() << error_completion_call << endl;
+
+        block_close(out);
+      } else {
+        out << indent() << "promise.resolve(Void())" << endl;
+      }
+      block_close(out);
+      out << indent() << "return promise" << endl;
+      block_close(out);
+
+    }
 
   }
   block_close(out);
@@ -2919,6 +2995,17 @@ string t_swift_generator::async_function_signature(t_function* tfunction) {
 
 /**
  * Renders a function signature that returns asynchronously via promises.
+ *
+ * @param tfunction Function definition
+ * @return String of rendered function definition
+ */
+string t_swift_generator::juxta_promise_function_signature(t_function* tfunction) {
+  return "func " + tfunction->get_name() + "(" + argument_list(tfunction->get_arglist(), "", false) + ") throws "
+         + "-> Promise<" + type_name(tfunction->get_returntype()) + ">";
+}
+
+/**
+ * Renders a function signature that returns asynchronously via promises.
  * ONLY FOR Swift2/Cocoa BACKWARDS COMPATIBILITY
  *
  * @param tfunction Function definition
@@ -3196,4 +3283,5 @@ THRIFT_REGISTER_GENERATOR(
     "    namespaced:      Generate source in Module scoped output directories for Swift Namespacing.\n"
     "    cocoa:           Generate Swift 2.x code compatible with the Thrift/Cocoa library\n"
     "    promise_kit:     Generate clients which invoke asynchronously via promises (only use with cocoa flag)\n"
+    "    juxta_promise:   Generate clients which invoke asynchronously via promises using JuxtaFoundation\n"
     "    safe_enums:      Generate enum types with an unknown case to handle unspecified values rather than throw a serialization error\n")
