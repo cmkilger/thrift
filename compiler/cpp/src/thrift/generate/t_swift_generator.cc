@@ -3000,7 +3000,7 @@ string t_swift_generator::async_function_signature(t_function* tfunction) {
  * @return String of rendered function definition
  */
 string t_swift_generator::juxta_promise_function_signature(t_function* tfunction) {
-  return "func " + tfunction->get_name() + "(" + argument_list(tfunction->get_arglist(), "", false) + ") throws "
+  return "func " + tfunction->get_name() + "(" + argument_list(tfunction->get_arglist(), "", false) + ") "
          + "-> Promise<" + type_name(tfunction->get_returntype()) + ">";
 }
 
