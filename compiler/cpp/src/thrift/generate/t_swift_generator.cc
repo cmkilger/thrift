@@ -872,28 +872,27 @@ void t_swift_generator::generate_swift_struct_hashable_extension(ostream& out,
   vector<t_field*>::const_iterator m_iter;
 
   if (!members.empty()) {
-    indent(out) << "let prime = 31" << endl;
-    indent(out) << "var result = 1" << endl;
+    indent(out) << "var hash = 0" << endl;
     if (!tstruct->is_union()) {
       for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
         t_field* tfield = *m_iter;
         string accessor = field_is_optional(tfield) ? "?." : ".";
         string defaultor = field_is_optional(tfield) ? " ?? 0" : "";
-        indent(out) << "result = prime &* result &+ (" << maybe_escape_identifier(tfield->get_name()) << accessor
-                    <<  "hashValue" << defaultor << ")" << endl;
+        indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
+                    <<  "hashValue" << defaultor << ") &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
       }
     } else {
       indent(out) << "switch self {" << endl;
       for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
         t_field *tfield = *m_iter;
-        indent(out) << "case ." << tfield->get_name() << "(let val): result = prime &* val.hashValue" << endl;
+        indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
       }
       indent(out) << "}" << endl << endl;
     }
-    indent(out) << "return result" << endl;
+    indent(out) << "return hash" << endl;
   }
   else {
-    indent(out) << "return 31" << endl;
+    indent(out) << "return 0" << endl;
   }
 
   block_close(out);
