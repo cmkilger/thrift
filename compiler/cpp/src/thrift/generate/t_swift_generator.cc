@@ -879,6 +879,7 @@ void t_swift_generator::generate_swift_struct_hashable_extension(ostream& out,
   if (!members.empty()) {
     indent(out) << "var hash = 0" << endl;
     if (!tstruct->is_union()) {
+      indent(out) << "#if __LP64__" << endl;
       for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
         t_field* tfield = *m_iter;
         string accessor = field_is_optional(tfield) ? "?." : ".";
@@ -886,13 +887,31 @@ void t_swift_generator::generate_swift_struct_hashable_extension(ostream& out,
         indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
                     <<  "hashValue" << defaultor << ") &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
       }
+      indent(out) << "#else" << endl;
+      for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+        t_field* tfield = *m_iter;
+        string accessor = field_is_optional(tfield) ? "?." : ".";
+        string defaultor = field_is_optional(tfield) ? " ?? 0" : "";
+        indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
+                    <<  "hashValue" << defaultor << ") &+ 0x19e37 &+ (hash << 6) &+ (hash >> 2)" << endl;
+      }
+      indent(out) << "#endif" << endl;
     } else {
+      indent(out) << "#if __LP64__" << endl;
       indent(out) << "switch self {" << endl;
       for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
         t_field *tfield = *m_iter;
         indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
       }
       indent(out) << "}" << endl << endl;
+      indent(out) << "#else" << endl;
+      indent(out) << "switch self {" << endl;
+      for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
+        t_field *tfield = *m_iter;
+        indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x19e37 &+ (hash << 6) &+ (hash >> 2)" << endl;
+      }
+      indent(out) << "}" << endl << endl;
+      indent(out) << "#endif" << endl;
     }
     indent(out) << "return hash" << endl;
   }
