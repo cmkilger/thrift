@@ -722,14 +722,18 @@ void t_swift_generator::generate_swift_struct(ostream& out,
     out << endl;
     out << endl;
 
-    if (!struct_has_required_fields(tstruct)) {
-      indent(out) << visibility << " init() { }" << endl;
-    }
-    if (struct_has_required_fields(tstruct)) {
-      generate_swift_struct_init(out, tstruct, false, is_private);
-    }
-    if (struct_has_optional_fields(tstruct)) {
+    if (!gen_cocoa_) {
       generate_swift_struct_init(out, tstruct, true, is_private);
+    } else {
+      if (!struct_has_required_fields(tstruct)) {
+        indent(out) << visibility << " init() { }" << endl;
+      }
+      if (struct_has_required_fields(tstruct)) {
+        generate_swift_struct_init(out, tstruct, false, is_private);
+      }
+      if (struct_has_optional_fields(tstruct)) {
+        generate_swift_struct_init(out, tstruct, true, is_private);
+      }
     }
   }
 
@@ -821,6 +825,9 @@ void t_swift_generator::generate_swift_struct_init(ostream& out,
       }
       out << (*m_iter)->get_name() << ": "
           << maybe_escape_identifier(type_name((*m_iter)->get_type(), field_is_optional(*m_iter)));
+      if (field_is_optional(*m_iter)) {
+        out << " = nil";
+      }
     }
     ++m_iter;
   }
@@ -830,9 +837,7 @@ void t_swift_generator::generate_swift_struct_init(ostream& out,
 
   for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
     if (!gen_cocoa_) {
-      bool should_set = all;
-      should_set = should_set || !field_is_optional((*m_iter));
-      if (should_set) {
+      if (all || !field_is_optional((*m_iter))) {
         out << indent() << "self." << maybe_escape_identifier((*m_iter)->get_name()) << " = "
             << maybe_escape_identifier((*m_iter)->get_name()) << endl;
       }
@@ -3057,6 +3062,11 @@ string t_swift_generator::argument_list(t_struct* tstruct, string protocol_name,
       // optional args not usually permitted for some reason, even though dynamic langs handle it
       // use annotation "swift.nullable" to achieve
       result += arg->get_name() + ": " + type_name(arg->get_type(), field_is_optional(arg));
+      if (false) {
+        // TODO: Defaults
+      } else if (field_is_optional(arg)) {
+        result += " = nil";
+      }
     } else {
       result += arg->get_name() + ": " + type_name(arg->get_type());
     }
