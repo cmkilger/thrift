@@ -870,57 +870,59 @@ void t_swift_generator::generate_swift_struct_hashable_extension(ostream& out,
   indent(out) << "extension " << tstruct->get_name() << " : Hashable";
   block_open(out);
   out << endl;
-  indent(out) << visibility << " var hashValue : Int";
-  block_open(out);
+  if (gen_cocoa_) {
+    indent(out) << visibility << " var hashValue : Int";
+    block_open(out);
 
-  const vector<t_field*>& members = tstruct->get_members();
-  vector<t_field*>::const_iterator m_iter;
+    const vector<t_field*>& members = tstruct->get_members();
+    vector<t_field*>::const_iterator m_iter;
 
-  if (!members.empty()) {
-    indent(out) << "var hash = 0" << endl;
-    if (!tstruct->is_union()) {
-      indent(out) << "#if __LP64__" << endl;
-      for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
-        t_field* tfield = *m_iter;
-        string accessor = field_is_optional(tfield) ? "?." : ".";
-        string defaultor = field_is_optional(tfield) ? " ?? 0" : "";
-        indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
-                    <<  "hashValue" << defaultor << ") &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
+    if (!members.empty()) {
+      indent(out) << "var hash = 0" << endl;
+      if (!tstruct->is_union()) {
+        indent(out) << "#if (arch(x86_64) || arch(arm64))" << endl;
+        for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+          t_field* tfield = *m_iter;
+          string accessor = field_is_optional(tfield) ? "?." : ".";
+          string defaultor = field_is_optional(tfield) ? " ?? 0" : "";
+          indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
+                      <<  "hashValue" << defaultor << ") &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
+        }
+        indent(out) << "#else" << endl;
+        for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+          t_field* tfield = *m_iter;
+          string accessor = field_is_optional(tfield) ? "?." : ".";
+          string defaultor = field_is_optional(tfield) ? " ?? 0" : "";
+          indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
+                      <<  "hashValue" << defaultor << ") &+ 0x19e37 &+ (hash << 6) &+ (hash >> 2)" << endl;
+        }
+        indent(out) << "#endif" << endl;
+      } else {
+        indent(out) << "#if (arch(x86_64) || arch(arm64))" << endl;
+        indent(out) << "switch self {" << endl;
+        for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
+          t_field *tfield = *m_iter;
+          indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
+        }
+        indent(out) << "}" << endl << endl;
+        indent(out) << "#else" << endl;
+        indent(out) << "switch self {" << endl;
+        for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
+          t_field *tfield = *m_iter;
+          indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x19e37 &+ (hash << 6) &+ (hash >> 2)" << endl;
+        }
+        indent(out) << "}" << endl << endl;
+        indent(out) << "#endif" << endl;
       }
-      indent(out) << "#else" << endl;
-      for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
-        t_field* tfield = *m_iter;
-        string accessor = field_is_optional(tfield) ? "?." : ".";
-        string defaultor = field_is_optional(tfield) ? " ?? 0" : "";
-        indent(out) << "hash ^= (" << maybe_escape_identifier(tfield->get_name()) << accessor
-                    <<  "hashValue" << defaultor << ") &+ 0x19e37 &+ (hash << 6) &+ (hash >> 2)" << endl;
-      }
-      indent(out) << "#endif" << endl;
-    } else {
-      indent(out) << "#if __LP64__" << endl;
-      indent(out) << "switch self {" << endl;
-      for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
-        t_field *tfield = *m_iter;
-        indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x9e3779b9 &+ (hash << 6) &+ (hash >> 2)" << endl;
-      }
-      indent(out) << "}" << endl << endl;
-      indent(out) << "#else" << endl;
-      indent(out) << "switch self {" << endl;
-      for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
-        t_field *tfield = *m_iter;
-        indent(out) << "case ." << tfield->get_name() << "(let val): hash ^= val.hashValue &+ 0x19e37 &+ (hash << 6) &+ (hash >> 2)" << endl;
-      }
-      indent(out) << "}" << endl << endl;
-      indent(out) << "#endif" << endl;
+      indent(out) << "return hash" << endl;
     }
-    indent(out) << "return hash" << endl;
-  }
-  else {
-    indent(out) << "return 0" << endl;
-  }
+    else {
+      indent(out) << "return 0" << endl;
+    }
 
-  block_close(out);
-  out << endl;
+    block_close(out);
+    out << endl;
+  }
   block_close(out);
   out << endl;
 }
