@@ -1308,6 +1308,10 @@ void t_php_generator::generate_service_processor(t_service* tservice) {
     f_service_processor << indent() << "protected $handler_ = null;" << endl;
   }
 
+  f_service_processor << indent() << "public $args = null;" << endl;
+  f_service_processor << indent() << "public $methodName = null;" << endl;
+  f_service_processor << indent() << "public $response = null;" << endl;
+
   f_service_processor << indent() << "public function __construct($handler)"<< endl
                       << indent() << "{" << endl;
 
@@ -1342,6 +1346,7 @@ void t_php_generator::generate_service_processor(t_service* tservice) {
 
   // HOT: check for method implementation
   f_service_processor << indent() << "$methodname = 'process_'.$fname;" << endl
+                      << indent() << "$this->methodName = $fname;" << endl
                       << indent() << "if (!method_exists($this, $methodname)) {" << endl;
 
   indent_up();
@@ -1427,6 +1432,8 @@ void t_php_generator::generate_process_function(std::ostream& out, t_service* ts
     out << indent() << "$input->readMessageEnd();" << endl;
   }
 
+  out << indent() << "$this->args = $args;" << endl;
+
   t_struct* xs = tfunction->get_xceptions();
   const std::vector<t_field*>& xceptions = xs->get_members();
   vector<t_field*>::const_iterator x_iter;
@@ -1462,6 +1469,8 @@ void t_php_generator::generate_process_function(std::ostream& out, t_service* ts
     out << "$args->" << (*f_iter)->get_name();
   }
   out << ");" << endl;
+
+  out << indent() << "$this->response = $result->success;" << endl;
 
   if (!tfunction->is_oneway() && xceptions.size() > 0) {
     indent_down();
