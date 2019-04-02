@@ -923,6 +923,32 @@ void t_swift_generator::generate_swift_struct_hashable_extension(ostream& out,
     block_close(out);
     out << endl;
   }
+  else {
+    indent(out) << visibility << " func hash(into hasher: inout Hasher)";
+    block_open(out);
+
+    const vector<t_field*>& members = tstruct->get_members();
+    vector<t_field*>::const_iterator m_iter;
+
+    if (!members.empty()) {
+      if (!tstruct->is_union()) {
+        for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+          t_field* tfield = *m_iter;
+          indent(out) << "hasher.combine(" << maybe_escape_identifier(tfield->get_name()) << ")" << endl;
+        }
+      } else {
+        indent(out) << "switch self {" << endl;
+        for (m_iter = members.begin(); m_iter != members.end(); m_iter++) {
+          t_field *tfield = *m_iter;
+          indent(out) << "case ." << tfield->get_name() << "(let val): hasher.combine(val)" << endl;
+        }
+        indent(out) << "}" << endl << endl;
+      }
+    }
+
+    block_close(out);
+    out << endl;
+  }
   block_close(out);
   out << endl;
 }
